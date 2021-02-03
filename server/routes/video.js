@@ -5,6 +5,7 @@ const { Video } = require("../models/Video");
 const { auth } = require("../middleware/auth");
 const multer = require("multer");
 var ffmpeg = require("fluent-ffmpeg");
+const { Subscriber } = require('../models/Subscriber');
 
 
 //=================================
@@ -36,9 +37,8 @@ let storage = multer.diskStorage({
 const upload = multer({ storage: storage }).single("file");
 
 
-//=================================
-//             Video
-//=================================
+
+
 
 router.post('/uploadfiles', (req, res) => {
 
@@ -109,28 +109,56 @@ router.post('/uploadVideo', (req, res) => {
 })
 
 router.get('/getVideos', (req, res) => {
-    
+
     // 비디오를 DB에서 가져와서 클라이언트에 보낸다.
 
     // 몽고db의 find 메서드. Video Collection안에 있는 모든 데이터를 가져온다.
     Video.find()
         .populate('writer')
-        .exec((err,videos) => {
-            if(err) return res.status(400).send(err)
-            res.status(200).json({success:true, videos})
+        .exec((err, videos) => {
+            if (err) return res.status(400).send(err)
+            res.status(200).json({ success: true, videos })
         })
 })
 
 router.post('/getVideoDetail', (req, res) => {
- 
 
-    Video.findOne({"_id" : req.body.videoId})
+
+    Video.findOne({ "_id": req.body.videoId })
         .populate('writer') // populate의 인자로 전달해주는 정보를 가지고 나머지 정보도 다 가져온다.
         .exec((err, videoDetail) => {
-            if(err) return res.status(400).send(err);
-            return res.status(200).json({success:true, videoDetail})
+            if (err) return res.status(400).send(err);
+            return res.status(200).json({ success: true, videoDetail })
         })
 
 })
+
+router.post('/getSubscriptionVideos', (req, res) => {
+
+    // 자신의 아이디를 가지고 구독하는 사람들을 찾는다.
+    Subscriber.find({ 'userFrom': req.body.userFrom })
+        .exec((err, subscriberInfo) => {
+            if (err) return res.status(400).send(err);
+
+            // 자신이 구독하는 사람들이 담길 배열
+            let subscribedUser = [];
+
+            // map을 사용해서 구독하는 사람들을 배열에 담아준다.
+            subscriberInfo.map((subscriber, i) => {
+                subscribedUser.push(subscriber.userTo)
+            })
+
+            // 찾은 사람들의 비디오를 가지고 온다.
+
+            // 몽고db의 $in 메소드를 사용. 대상이 여러개일 때 사용.
+            // 이유는 subscribedUser가 당연히 여러명일 수 있기 때문에!
+            Video.find({ writer: { $in: subscribedUser } })
+                .populate('writer')
+                .exec((err, videos) => {
+                    if (err) return res.status(400).send(err);
+                    res.status(200).json({ success: true, videos })
+                })
+        })
+});
 
 module.exports = router;
